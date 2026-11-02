@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบติดตามและแดชบอร์ดสำรวจค่าเช่าบ้านรายจังหวัด (สนค.)</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root {
+      --primary: #0f2757;
+      --primary-accent: #1e40af;
+      --accent-green: #10b981;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --radius: 12px;
+      --shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sarabun', system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      background: linear-gradient(135deg, #0b1a38 0%, #1e3a8a 100%);
+      color: white;
+      padding: 0.85rem 1.75rem 0.6rem 1.75rem;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .brand-group { display: flex; align-items: center; gap: 12px; }
+    .brand-badge {
+      width: 44px; height: 44px; background: #ffffff; color: var(--primary);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .brand-title h1 { font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .tag-snk {
+      font-size: 0.7rem; background: rgba(59, 130, 246, 0.35); border: 1px solid rgba(147, 197, 253, 0.6);
+      padding: 2px 8px; border-radius: 999px; color: #bfdbfe;
+    }
+    .brand-title p { font-size: 0.82rem; color: #94a3b8; }
+
+    .btn-action-primary {
+      background: var(--accent-green); color: white; border: none; padding: 0.6rem 1.25rem;
+      border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+      transition: all 0.2s;
+    }
+    .btn-action-primary:hover { background: #059669; transform: translateY(-1px); }
+
+    .nav-tabs {
+      display: flex; gap: 6px; overflow-x: auto; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 0.55rem;
+    }
+    .nav-tab-btn {
+      background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.08);
+      padding: 0.55rem 1.15rem; border-radius: 8px 8px 0 0; font-size: 0.88rem; font-weight: 500;
+      cursor: pointer; white-space: nowrap; transition: all 0.18s;
+    }
+    .nav-tab-btn:hover { background: rgba(255,255,255,0.18); color: white; }
+    .nav-tab-btn.active {
+      background: white; color: var(--primary); font-weight: 700; border-color: white; box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+    }
+
+    main { flex: 1; max-width: 1540px; width: 100%; margin: 0 auto; padding: 1.25rem; }
+    .tab-section { display: none; animation: fadeIn 0.22s ease-in; }
+    .tab-section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card {
+      background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+      box-shadow: var(--shadow); padding: 1.25rem; margin-bottom: 1.25rem;
+    }
+
+    /* Map Layout */
+    .map-header-bar {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+      margin-bottom: 1rem; background: #ffffff; padding: 0.8rem 1.2rem; border-radius: 10px; border: 1px solid var(--border);
+    }
+    .mode-buttons { display: flex; gap: 6px; align-items: center; }
+    .btn-toggle-mode {
+      background: #f1f5f9; border: 1px solid #cbd5e1; padding: 0.45rem 0.95rem; border-radius: 6px;
+      font-size: 0.85rem; cursor: pointer; font-weight: 600; color: var(--text-muted);
+    }
+    .btn-toggle-mode.active {
+      background: var(--primary-accent); color: white; border-color: var(--primary-accent); box-shadow: 0 1px 4px rgba(30,64,175,0.3);
+    }
+
+    .map-layout-grid {
+      display: grid; grid-template-columns: 1fr 390px; gap: 1.25rem;
+    }
+    @media (max-width: 1120px) { .map-layout-grid { grid-template-columns: 1fr; } }
+
+    #leafletMap {
+      width: 100%; height: 750px; border-radius: var(--radius); border: 1px solid var(--border);
+      background: #e5e9ec; box-shadow: inset 0 2px 6px rgba(0,0,0,0.04); z-index: 10;
+    }
+
+    .sidebar-pane { display: flex; flex-direction: column; gap: 1.1rem; }
+    .progress-bar-shell { height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    .progress-bar-core { height: 100%; background: var(--accent-green); width: 0%; transition: width 0.4s ease; }
+
+    .team-filter-card {
+      background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.15rem;
+      display: flex; flex-direction: column; box-shadow: var(--shadow); flex: 1;
+    }
+    .team-search-input { width: 100%; padding: 0.55rem 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; margin: 8px 0; }
+    .btn-show-all-teams {
+      background: #f1f5f9; border: 1px solid #cbd5e1; color: var(--primary); padding: 0.6rem;
+      border-radius: 6px; font-size: 0.85rem; font-weight: 700; cursor: pointer; text-align: center; margin-bottom: 8px;
+    }
+    .btn-show-all-teams.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    .team-selection-list { display: flex; flex-direction: column; gap: 6px; max-height: 440px; overflow-y: auto; }
+    .team-item-btn {
+      display: flex; align-items: center; justify-content: space-between; padding: 8px 12px;
+      border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; cursor: pointer; font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+    .team-item-btn:hover { background: #e2e8f0; }
+    .team-item-btn.selected { background: #dbeafe; border-color: #3b82f6; font-weight: 700; }
+    .color-swatch { width: 16px; height: 16px; border-radius: 4px; margin-right: 8px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.15); }
+    .team-actions { display: flex; align-items: center; gap: 6px; }
+    .btn-team-icon {
+      background: none; border: none; cursor: pointer; padding: 3px 5px; border-radius: 4px;
+      font-size: 0.82rem; color: var(--text-muted); transition: all 0.15s;
+    }
+    .btn-team-icon:hover { background: rgba(0,0,0,0.08); color: var(--text); }
+    .btn-team-icon.delete:hover { background: #fee2e2; color: #dc2626; }
+    .btn-delete-prov {
+      background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 0.55rem 1rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+    }
+    .btn-delete-prov:hover { background: #fecaca; }
+
+    /* Custom Leaflet Tooltip */
+    .leaflet-tooltip.custom-th-tooltip {
+      background: rgba(15, 23, 42, 0.94); color: #ffffff; border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+
+    /* Tab 2: Google Sheets */
+    .sync-panel { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: var(--radius); padding: 1.2rem; margin-bottom: 1.25rem; }
+    .sync-row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+    .sync-row input { flex: 1; min-width: 280px; padding: 0.6rem 0.9rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem; background: white; }
+    .btn-sync { background: var(--primary); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.88rem; }
+    .btn-demo { background: #e2e8f0; color: #1e293b; border: 1px solid #cbd5e1; padding: 0.6rem 1.1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.88rem; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+    .kpi-card-box { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; box-shadow: var(--shadow); }
+    .kpi-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+    .kpi-num { font-size: 1.7rem; font-weight: 700; color: var(--primary); margin: 4px 0; }
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+    @media (max-width: 860px) { .charts-row { grid-template-columns: 1fr; } }
+    .chart-box { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; min-height: 260px; display: flex; flex-direction: column; }
+    .chart-box h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }
+    .canvas-container { flex: 1; width: 100%; height: 210px; position: relative; }
+    .table-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0.9rem; justify-content: space-between; }
+    .table-selectors { display: flex; gap: 8px; flex-wrap: wrap; }
+    .table-selectors select, .table-selectors input { padding: 0.5rem 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
+    .btn-export { background: #0f172a; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; text-align: left; }
+    th { background: #f8fafc; color: var(--text-muted); font-weight: 600; }
+
+    /* Tab 3: Calendar */
+    .calendar-container { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.3rem; box-shadow: var(--shadow); }
+    .cal-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px; }
+    .cal-nav-group { display: flex; align-items: center; gap: 10px; }
+    .cal-nav-group h2 { font-size: 1.25rem; font-weight: 700; color: var(--primary); min-width: 190px; text-align: center; }
+    .btn-cal-step { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .cal-day-title { text-align: center; font-size: 0.82rem; font-weight: 700; color: var(--text-muted); padding: 8px 0; background: #f1f5f9; border-radius: 4px; }
+    .cal-cell-box {
+      height: 135px;
+      max-height: 135px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 7px;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .cal-cell-box:hover { background: #f8fafc; border-color: #94a3b8; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .cal-cell-box.empty { background: #f8fafc; opacity: 0.45; cursor: default; }
+    .cal-date-badge { font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; }
+    .cal-events-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      overflow: hidden;
+    }
+    .badge-event-pill {
+      font-size: 0.69rem;
+      padding: 2.5px 6px;
+      border-radius: 4px;
+      color: white;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      line-height: 1.25;
+    }
+    .badge-event-pill.deadline { background: var(--accent-green) !important; border-left: 3px solid #047857; }
+    .cal-more-btn {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--primary-accent);
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 4px;
+      padding: 1.5px 4px;
+      text-align: center;
+      margin-top: auto;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    .cal-more-btn:hover { background: #dbeafe; }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(2px);
+      z-index: 2000; display: none; align-items: center; justify-content: center; padding: 15px;
+    }
+    .modal-box { background: white; width: 100%; max-width: 520px; border-radius: 12px; padding: 1.5rem; box-shadow: 0 15px 30px rgba(0,0,0,0.25); }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
+    .btn-close-modal { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); }
+    .form-item { margin-bottom: 0.9rem; }
+    .form-item label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; }
+    .form-item input, .form-item select { width: 100%; padding: 0.58rem 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem; }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 1.3rem; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-top">
+      <div class="brand-group">
+        <div class="brand-badge">สนค.</div>
+        <div class="brand-title">
+          <h1>ระบบติดตามการสำรวจค่าเช่าบ้านรายจังหวัด <span class="tag-snk">Leaflet.js + GeoJSON</span></h1>
+          <p>สำนักงานนโยบายและยุทธศาสตร์การค้า (Trade Policy and Strategy Office)</p>
+        </div>
+      </div>
+      <button class="btn-action-primary" onclick="openAssignmentModal()">
+        <span>+ ลงทะเบียน พื้นที่สำรวจ</span>
+      </button>
+    </div>
+
+    <div class="nav-tabs">
+      <button class="nav-tab-btn active" id="btn-tab1" onclick="switchTab('tab1')">
+        🗺️ 1. แผนที่ภาพรวม Leaflet (77 จังหวัด)
+      </button>
+      <button class="nav-tab-btn" id="btn-tab2" onclick="switchTab('tab2')">
+        📊 2. รายละเอียดข้อมูลสำรวจรายทีม (Google Sheets)
+      </button>
+      <button class="nav-tab-btn" id="btn-tab3" onclick="switchTab('tab3')">
+        📅 3. ปฏิทินปฏิบัติงาน & วันคีย์เสร็จ (+7 วัน)
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- TAB 1: LEAFLET.JS MAP WITH THAILAND GEOJSON -->
+    <section id="tab1" class="tab-section active">
+      <div class="map-header-bar">
+        <div class="mode-buttons">
+          <span style="font-size:0.85rem; font-weight:700; color:#334155; margin-right:4px;">แสดงสีแผนที่:</span>
+          <button class="btn-toggle-mode active" id="mode-team" onclick="setColorDisplayMode('team')">
+            👥 ทีมผู้สำรวจ (คนละสี)
+          </button>
+          <button class="btn-toggle-mode" id="mode-status" onclick="setColorDisplayMode('status')">
+            📌 สถานะงาน (เสร็จสิ้น/กำลังทำ/วางแผน)
+          </button>
+        </div>
+        <div style="font-size:0.82rem; color:var(--text-muted);">
+          💡 คลิกที่จังหวัดบนแผนที่ Leaflet เพื่อลงข้อมูล | คลิกเลือกชื่อทีมทางขวามือเพื่อ Highlight ทีมนั้น
+        </div>
+      </div>
+
+      <div class="map-layout-grid">
+        <div style="position:relative;">
+          <div id="leafletMap"></div>
+        </div>
+
+        <div class="sidebar-pane">
+          <div class="card">
+            <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.4rem;">
+              📊 ความคืบหน้าการลงพื้นที่
+            </h3>
+            <div style="display:flex; justify-content:space-between; font-size:0.86rem; font-weight:600;">
+              <span>ครอบคลุมแล้ว</span>
+              <span id="txt-coverage-stat">0 / 77 จังหวัด</span>
+            </div>
+            <div class="progress-bar-shell">
+              <div class="progress-bar-core" id="progress-bar-fill"></div>
+            </div>
+          </div>
+
+          <div class="team-filter-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h3 style="font-size:0.95rem; font-weight:700;">🎨 สัญลักษณ์สีทีมงาน</h3>
+              <span id="txt-team-count-badge" style="font-size:0.75rem; background:#e2e8f0; padding:2px 8px; border-radius:10px; font-weight:700;">0 ทีม</span>
+            </div>
+
+            <input type="text" id="teamSearchBox" class="team-search-input" placeholder="🔍 ค้นหาชื่อทีม..." oninput="filterTeamList()">
+            <button class="btn-show-all-teams active" id="btnShowAllTeams" onclick="selectTeamFilter(null)">
+              ✨ แสดงทุกทีม (ภาพรวมทั้งประเทศ)
+            </button>
+
+            <div class="team-selection-list" id="teamSelectionList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: GOOGLE SHEETS DASHBOARD -->
+    <section id="tab2" class="tab-section">
+      <div class="sync-panel">
+        <h3 style="font-size:0.95rem; font-weight:700; color:var(--primary); margin-bottom:4px;">
+          🔗 แหล่งข้อมูลแบบสอบถามจาก Google Sheets
+        </h3>
+        <p style="font-size:0.82rem; color:var(--text-muted);">
+          วางลิงก์ Published CSV ของ Google Sheets หรือกดปุ่มข้อมูลตัวอย่างเพื่อทดสอบระบบทันที
+        </p>
+
+        <div class="sync-row">
+          <input type="text" id="inputSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+          <button class="btn-sync" onclick="fetchGoogleSheet()">⚡ ดึงข้อมูลล่าสุด</button>
+          <button class="btn-demo" onclick="loadMockData()">🧪 ใช้ข้อมูลตัวอย่าง (Demo Data)</button>
+        </div>
+        <div id="txtSyncMsg" style="font-size:0.8rem; color:var(--text-muted); font-weight:500;">
+          สถานะ: พร้อมเชื่อมต่อข้อมูล
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi-card-box">
+          <div class="kpi-title">จำนวนแบบสอบถามที่เก็บได้</div>
+          <div class="kpi-num" id="kpi-total-records">0</div>
+          <div class="kpi-note">ชุดแบบสอบถาม / แปลง</div>
+        </div>
+        <div class="kpi-card-box">
+          <div class="kpi-title">ค่าเช่าเฉลี่ย</div>
+          <div class="kpi-num" id="kpi-avg-rent" style="color:var(--accent-green);">0 ฿</div>
+          <div class="kpi-note">บาท / เดือน</div>
+        </div>
+        <div class="kpi-card-box">
+          <div class="kpi-title">ช่วงค่าเช่า (ต่ำสุด - สูงสุด)</div>
+          <div class="kpi-num" id="kpi-rent-span" style="font-size:1.4rem; color:#6366f1;">0 - 0 ฿</div>
+          <div class="kpi-note">บาท / เดือน</div>
+        </div>
+        <div class="kpi-card-box">
+          <div class="kpi-title">จังหวัดที่มีข้อมูลส่งมา</div>
+          <div class="kpi-num" id="kpi-prov-count">0</div>
+          <div class="kpi-note">จังหวัดทั่วประเทศ</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-box">
+          <h4>สัดส่วนประเภทที่อยู่อาศัยที่สำรวจ</h4>
+          <div class="canvas-container"><canvas id="housingTypeCanvas"></canvas></div>
+        </div>
+        <div class="chart-box">
+          <h4>ค่าเช่าเฉลี่ยแยกตามทีมสำรวจ (บาท/เดือน)</h4>
+          <div class="canvas-container"><canvas id="teamRentCanvas"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-tools">
+          <div class="table-selectors">
+            <select id="selFilterTeam" onchange="filterSheetTable()"><option value="ALL">-- ทุกทีมสำรวจ --</option></select>
+            <select id="selFilterProv" onchange="filterSheetTable()"><option value="ALL">-- ทุกจังหวัด --</option></select>
+            <select id="selFilterType" onchange="filterSheetTable()"><option value="ALL">-- ทุกประเภทที่พัก --</option></select>
+            <input type="text" id="inputTableSearch" placeholder="🔍 ค้นหาชื่อที่พัก, อำเภอ..." oninput="filterSheetTable()">
+          </div>
+          <button class="btn-export" onclick="exportDataCSV()">📥 Export CSV</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่เก็บ</th>
+                <th>ทีมสำรวจ</th>
+                <th>จังหวัด</th>
+                <th>อำเภอ</th>
+                <th>ชื่อโครงการ / ที่พัก</th>
+                <th>ประเภท</th>
+                <th>ค่าเช่า (บาท/ด.)</th>
+                <th>ผู้บันทึก</th>
+              </tr>
+            </thead>
+            <tbody id="sheetTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: CALENDAR VIEW -->
+    <section id="tab3" class="tab-section">
+      <div class="calendar-container">
+        <div class="cal-controls">
+          <div class="cal-nav-group">
+            <button class="btn-cal-step" onclick="stepCalMonth(-1)">◀ เดือนก่อน</button>
+            <h2 id="calendarTitleText">พฤศจิกายน 2569</h2>
+            <button class="btn-cal-step" onclick="stepCalMonth(1)">เดือนถัดไป ▶</button>
+            <button class="btn-cal-step" onclick="setCalToCurrentMonth()" style="background:#e2e8f0;">เดือนปัจจุบัน</button>
+          </div>
+
+          <div style="display:flex; gap:16px; font-size:0.82rem; align-items:center;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="display:inline-block; width:12px; height:12px; background:#3b82f6; border-radius:3px;"></span>
+              <span>📍 ช่วงลงพื้นที่สำรวจ</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="display:inline-block; width:12px; height:12px; background:#10b981; border-radius:3px;"></span>
+              <span>✅ กำหนดคีย์เสร็จ (+7 วัน)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cal-grid" id="calendarBodyGrid"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal: Assign Team / Province -->
+  <div class="modal-backdrop" id="modalAssign">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modalAssignHeading">ลงทะเบียนพื้นที่สำรวจ</h3>
+        <button class="btn-close-modal" onclick="closeAssignmentModal()">&times;</button>
+      </div>
+
+      <form onsubmit="saveAssignmentForm(event)">
+        <input type="hidden" id="modalOriginalProvince" value="">
+        <div class="form-item">
+          <label>จังหวัดที่ลงพื้นที่</label>
+          <select id="modalProvSelect" required onchange="onProvinceSelectChange()"></select>
+        </div>
+
+        <div class="form-item">
+          <label>เลือกทีมผู้รับผิดชอบ</label>
+          <div style="display:flex; gap:8px; margin-bottom:6px;">
+            <select id="modalExistingTeamSelect" style="flex:1;" onchange="onExistingTeamSelectChange()">
+              <option value="__NEW__">+ สร้างทีมใหม่ / กำหนดเอง</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>ชื่อทีมสำรวจ</label>
+            <input type="text" id="modalTeamInput" placeholder="เช่น ทีมภาคเหนือ A" required>
+          </div>
+          <div class="form-item">
+            <label>สีประจำตัวทีม</label>
+            <input type="color" id="modalColorInput" value="#f97316" style="height:38px; cursor:pointer;">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>วันที่เริ่มลงพื้นที่</label>
+            <input type="date" id="modalStartDate" required value="2026-11-02" onchange="autoUpdateSurveyCompleteDate()">
+          </div>
+          <div class="form-item">
+            <label>วันที่สิ้นสุดการลงพื้นที่</label>
+            <input type="date" id="modalEndDate" required value="2026-11-06" onchange="autoUpdateSurveyCompleteDate()">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>วันที่เก็บแบบสอบถามเสร็จ (วันสำรวจ)</label>
+            <input type="date" id="modalSurveyCompleteDate" required value="2026-11-06" onchange="calcDeadlinePreview()">
+          </div>
+          <div class="form-item">
+            <label>กำหนดคีย์เข้าระบบ (+7 วันอัตโนมัติ)</label>
+            <input type="date" id="modalDeadlinePreview" readonly style="background:#f1f5f9; color:#047857; font-weight:700;">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>สถานะการสำรวจ</label>
+            <select id="modalStatusSelect">
+              <option value="DONE">สำรวจเสร็จสิ้น</option>
+              <option value="IN_PROGRESS">กำลังลงพื้นที่</option>
+              <option value="PLANNED">วางแผน/มอบหมาย</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>เป้าหมายจำนวนแบบสอบถาม (ยูนิต)</label>
+            <input type="number" id="modalTargetUnits" min="1" placeholder="เช่น 30" value="30">
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" class="btn-delete-prov" id="btnDeleteProvAssign" onclick="deleteProvinceAssignment()" style="display:none; margin-right:auto;">🗑️ ลบ/ยกเลิกงานในจังหวัดนี้</button>
+          <button type="button" class="btn-demo" onclick="closeAssignmentModal()">ยกเลิก</button>
+          <button type="submit" id="btnSubmitAssignment" class="btn-action-primary">บันทึกข้อมูลจังหวัด</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Team Batch -->
+  <div class="modal-backdrop" id="modalEditTeam">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modalEditTeamHeading">✏️ แก้ไขข้อมูลทีมสำรวจ</h3>
+        <button class="btn-close-modal" onclick="closeEditTeamModal()">&times;</button>
+      </div>
+      <form onsubmit="saveEditTeamForm(event)">
+        <input type="hidden" id="editOldTeamName">
+        <div class="form-item">
+          <label>ชื่อทีมสำรวจ</label>
+          <input type="text" id="editTeamNameInput" required>
+        </div>
+        <div class="form-item">
+          <label>สีประจำตัวทีม</label>
+          <input type="color" id="editTeamColorInput" style="height:42px; cursor:pointer;" required>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">
+          * การเปลี่ยนชื่อหรือสีจะมีผลกับทุกจังหวัดที่ทีมนี้รับผิดชอบโดยอัตโนมัติ
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn-demo" onclick="closeEditTeamModal()">ยกเลิก</button>
+          <button type="submit" class="btn-action-primary">บันทึกการแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Custom In-App Confirm Delete Dialog (ไม่ใช้ confirm() ป้องกัน Iframe Sandbox บล็อก) -->
+  <div class="modal-backdrop" id="modalConfirmDelete" style="z-index: 3000;">
+    <div class="modal-box" style="max-width: 420px; text-align: center;">
+      <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚠️</div>
+      <h3 id="confirmDeleteTitle" style="color: #dc2626; margin-bottom: 0.5rem;">ยืนยันการลบข้อมูล</h3>
+      <p id="confirmDeleteMsg" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+        คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลนี้?
+      </p>
+      <div style="display: flex; justify-content: center; gap: 10px;">
+        <button type="button" class="btn-demo" onclick="closeConfirmModal()">ยกเลิก</button>
+        <button type="button" class="btn-delete-prov" id="btnExecuteDelete" style="background:#dc2626; color:white; border:none; padding:0.6rem 1.4rem;">ยืนยันการลบ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Day Tasks Detail & Edit from Calendar -->
+  <div class="modal-backdrop" id="modalDayTasks" style="z-index: 2500;">
+    <div class="modal-box" style="max-width: 600px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-head">
+        <div>
+          <h3 id="modalDayTasksHeading" style="font-size: 1.15rem; color: var(--primary);">ภารกิจประจำวัน</h3>
+          <p id="modalDayTasksSub" style="font-size: 0.8rem; color: var(--text-muted);"></p>
+        </div>
+        <button class="btn-close-modal" onclick="closeDayTasksModal()">&times;</button>
+      </div>
+      
+      <div id="modalDayTasksList" style="overflow-y: auto; flex: 1; padding: 6px 0; display: flex; flex-direction: column; gap: 14px;">
+        <!-- รายการภารกิจของวันจะแสดงที่นี่ -->
+      </div>
+
+      <div class="modal-foot" style="border-top: 1px solid #f1f5f9; padding-top: 12px; margin-top: 10px;">
+        <button type="button" class="btn-demo" onclick="closeDayTasksModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Quick Edit Questionnaire from Calendar -->
+  <div class="modal-backdrop" id="modalEditQuestionnaire" style="z-index: 2800;">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-head">
+        <h3>✏️ แก้ไขข้อมูลสำรวจแบบสอบถาม</h3>
+        <button class="btn-close-modal" onclick="closeEditQuestionnaireModal()">&times;</button>
+      </div>
+      <form onsubmit="saveEditQuestionnaireForm(event)">
+        <input type="hidden" id="editQIndex">
+        <div class="form-item">
+          <label>ทีมสำรวจ</label>
+          <input type="text" id="editQTeam" required>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>จังหวัด</label>
+            <input type="text" id="editQProv" required>
+          </div>
+          <div class="form-item">
+            <label>อำเภอ</label>
+            <input type="text" id="editQDist">
+          </div>
+        </div>
+        <div class="form-item">
+          <label>ชื่อโครงการ / ที่พัก</label>
+          <input type="text" id="editQName" required>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>ประเภทที่พัก</label>
+            <select id="editQType">
+              <option value="อพาร์ตเมนต์">อพาร์ตเมนต์</option>
+              <option value="หอพัก">หอพัก</option>
+              <option value="ทาวน์เฮาส์">ทาวน์เฮาส์</option>
+              <option value="บ้านเดี่ยว">บ้านเดี่ยว</option>
+              <option value="ห้องเช่า">ห้องเช่า</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>ค่าเช่า (บาท/เดือน)</label>
+            <input type="number" id="editQRent" required min="0">
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label>วันที่สำรวจจริง</label>
+            <input type="date" id="editQDate" required>
+          </div>
+          <div class="form-item">
+            <label>ผู้บันทึก</label>
+            <input type="text" id="editQBy">
+          </div>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--accent-green); margin-bottom: 12px; font-weight: 500;">
+          💡 วันที่กำหนดคีย์เสร็จ (+7 วัน) จะถูกคำนวณและอัปเดตใหม่โดยอัตโนมัติ
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn-demo" onclick="closeEditQuestionnaireModal()">ยกเลิก</button>
+          <button type="submit" class="btn-action-primary">บันทึกการแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // =========================================================================
+    // 1. DATA DEFINITIONS: 77 PROVINCES & INITIAL ASSIGNMENTS
+    // =========================================================================
+    const THAILAND_REGIONS = [
+      { region: "ภาคเหนือ", list: ["เชียงใหม่", "เชียงราย", "ลำปาง", "ลำพูน", "แม่ฮ่องสอน", "น่าน", "พะเยา", "แพร่", "อุตรดิตถ์", "ตาก", "สุโขทัย", "พิษณุโลก", "พิจิตร", "เพชรบูรณ์", "นครสวรรค์", "อุทัยธานี", "กำแพงเพชร"] },
+      { region: "ภาคกลาง", list: ["กรุงเทพมหานคร", "นนทบุรี", "ปทุมธานี", "สมุทรปราการ", "พระนครศรีอยุธยา", "สระบุรี", "ลพบุรี", "อ่างทอง", "สิงห์บุรี", "ชัยนาท"] },
+      { region: "ภาคตะวันออกเฉียงเหนือ", list: ["ขอนแก่น", "นครราชสีมา", "อุดรธานี", "อุบลราชธานี", "บุรีรัมย์", "สุรินทร์", "ศรีสะเกษ", "ร้อยเอ็ด", "มหาสารคาม", "ชัยภูมิ", "กาฬสินธุ์", "สกลนคร", "นครพนม", "มุกดาหาร", "ยโสธร", "อำนาจเจริญ", "หนองคาย", "เลย", "หนองบัวลำภู", "บึงกาฬ"] },
+      { region: "ภาคตะวันออก", list: ["ชลบุรี", "ระยอง", "จันทบุรี", "ตราด", "ฉะเชิงเทรา", "ปราจีนบุรี", "นครนายก", "สระแก้ว"] },
+      { region: "ภาคตะวันตก", list: ["กาญจนบุรี", "สุพรรณบุรี", "ราชบุรี", "เพชรบุรี", "ประจวบคีรีขันธ์", "นครปฐม", "สมุทรสาคร", "สมุทรสงคราม"] },
+      { region: "ภาคใต้", list: ["ภูเก็ต", "สงขลา", "สุราษฎร์ธานี", "นครศรีธรรมราช", "กระบี่", "พังงา", "ตรัง", "พัทลุง", "ชุมพร", "ระนอง", "สตูล", "ปัตตานี", "ยะลา", "นราธิวาส"] }
+    ];
+
+    // English-Thai Province Name Normalizer Map
+    const EN_TO_TH_PROVINCES = {
+      "Bangkok": "กรุงเทพมหานคร", "Chiang Mai": "เชียงใหม่", "Chiang Rai": "เชียงราย", "Phuket": "ภูเก็ต",
+      "Chon Buri": "ชลบุรี", "Khon Kaen": "ขอนแก่น", "Nakhon Ratchasima": "นครราชสีมา", "Krabi": "กระบี่",
+      "Songkhla": "สงขลา", "Surat Thani": "สุราษฎร์ธานี", "Ubon Ratchathani": "อุบลราชธานี", "Udon Thani": "อุดรธานี",
+      "Nan": "น่าน", "Lampang": "ลำปาง", "Lamphun": "ลำพูน", "Mae Hong Son": "แม่ฮ่องสอน", "Phayao": "พะเยา",
+      "Phrae": "แพร่", "Uttaradit": "อุตรดิตถ์", "Tak": "ตาก", "Sukhothai": "สุโขทัย", "Phitsanulok": "พิษณุโลก",
+      "Kamphaeng Phet": "กำแพงเพชร", "Phichit": "พิจิตร", "Phetchabun": "เพชรบูรณ์", "Nakhon Sawan": "นครสวรรค์",
+      "Uthai Thani": "อุทัยธานี", "Loei": "เลย", "Nong Khai": "หนองคาย", "Bueng Kan": "บึงกาฬ",
+      "Nong Bua Lam Phu": "หนองบัวลำภู", "Sakon Nakhon": "สกลนคร", "Nakhon Phanom": "นครพนม", "Mukdahan": "มุกดาหาร",
+      "Kalasin": "กาฬสินธุ์", "Chaiyaphum": "ชัยภูมิ", "Maha Sarakham": "มหาสารคาม", "Roi Et": "ร้อยเอ็ด",
+      "Yasothon": "ยโสธร", "Amnat Charoen": "อำนาจเจริญ", "Si Sa Ket": "ศรีสะเกษ", "Surin": "สุรินทร์",
+      "Buri Ram": "บุรีรัมย์", "Kanchanaburi": "กาญจนบุรี", "Suphan Buri": "สุพรรณบุรี", "Ratchaburi": "ราชบุรี",
+      "Phetchaburi": "เพชรบุรี", "Prachuap Khiri Khan": "ประจวบคีรีขันธ์", "Chai Nat": "ชัยนาท", "Sing Buri": "สิงห์บุรี",
+      "Lop Buri": "ลพบุรี", "Ang Thong": "อ่างทอง", "Saraburi": "สระบุรี", "Phra Nakhon Si Ayutthaya": "พระนครศรีอยุธยา",
+      "Pathum Thani": "ปทุมธานี", "Nonthaburi": "นนทบุรี", "Nakhon Pathom": "นครปฐม", "Samut Prakan": "สมุทรปราการ",
+      "Samut Sakhon": "สมุทรสาคร", "Samut Songkhram": "สมุทรสงคราม", "Nakhon Nayok": "นครนายก", "Prachin Buri": "ปราจีนบุรี",
+      "Sa Kaeo": "สระแก้ว", "Chachoengsao": "ฉะเชิงเทรา", "Rayong": "ระยอง", "Chanthaburi": "จันทบุรี",
+      "Trat": "ตราด", "Chumphon": "ชุมพร", "Ranong": "ระนอง", "Phangnga": "พังงา", "Nakhon Si Thammarat": "นครศรีธรรมราช",
+      "Trang": "ตรัง", "Phatthalung": "พัทลุง", "Satun": "สตูล", "Pattani": "ปัตตานี", "Yala": "ยะลา", "Narathiwat": "นราธิวาส"
+    };
+
+    // Thai coordinates centers for Fallback GeoJSON
+    const THAI_PROV_CENTROIDS = {
+      "เชียงใหม่": [18.79, 98.98], "เชียงราย": [19.91, 99.83], "น่าน": [18.78, 100.78], "พะเยา": [19.26, 99.93],
+      "ลำปาง": [18.29, 99.49], "ลำพูน": [18.57, 99.01], "แม่ฮ่องสอน": [19.30, 97.97], "แพร่": [18.14, 100.14],
+      "อุตรดิตถ์": [17.62, 100.10], "ตาก": [16.88, 99.12], "สุโขทัย": [17.01, 99.82], "พิษณุโลก": [16.82, 100.27],
+      "กำแพงเพชร": [16.48, 99.52], "พิจิตร": [16.44, 100.35], "เพชรบูรณ์": [16.42, 101.16], "นครสวรรค์": [15.70, 100.14],
+      "อุทัยธานี": [15.38, 100.02], "เลย": [17.49, 101.72], "หนองคาย": [17.88, 102.74], "บึงกาฬ": [18.36, 103.65],
+      "หนองบัวลำภู": [17.20, 102.44], "อุดรธานี": [17.42, 102.79], "สกลนคร": [17.15, 104.15], "นครพนม": [17.41, 104.78],
+      "มุกดาหาร": [16.54, 104.72], "ขอนแก่น": [16.44, 102.83], "กาฬสินธุ์": [16.43, 103.51], "ชัยภูมิ": [15.81, 102.03],
+      "มหาสารคาม": [16.18, 103.30], "ร้อยเอ็ด": [16.05, 103.65], "ยโสธร": [15.79, 104.14], "อำนาจเจริญ": [15.86, 104.63],
+      "อุบลราชธานี": [15.24, 104.85], "ศรีสะเกษ": [15.12, 104.32], "สุรินทร์": [14.88, 103.49], "บุรีรัมย์": [15.00, 103.11],
+      "นครราชสีมา": [14.97, 102.10], "กรุงเทพมหานคร": [13.75, 100.52], "นนทบุรี": [13.86, 100.51], "ปทุมธานี": [14.02, 100.53],
+      "สมุทรปราการ": [13.60, 100.60], "พระนครศรีอยุธยา": [14.35, 100.58], "สระบุรี": [14.53, 100.91], "ลพบุรี": [14.80, 100.65],
+      "อ่างทอง": [14.59, 100.45], "สิงห์บุรี": [14.89, 100.40], "ชัยนาท": [15.19, 100.13], "กาญจนบุรี": [14.02, 99.53],
+      "สุพรรณบุรี": [14.47, 100.12], "ราชบุรี": [13.54, 99.82], "เพชรบุรี": [13.11, 99.94], "ประจวบคีรีขันธ์": [11.81, 99.80],
+      "นครปฐม": [13.82, 100.06], "สมุทรสาคร": [13.55, 100.27], "สมุทรสงคราม": [13.41, 100.00], "นครนายก": [14.21, 101.21],
+      "ปราจีนบุรี": [14.05, 101.37], "สระแก้ว": [13.81, 102.07], "ฉะเชิงเทรา": [13.69, 101.07], "ชลบุรี": [13.36, 100.98],
+      "ระยอง": [12.68, 101.28], "จันทบุรี": [12.61, 102.10], "ตราด": [12.24, 102.52], "ชุมพร": [10.49, 99.18],
+      "ระนอง": [9.97, 98.63], "สุราษฎร์ธานี": [9.14, 99.33], "พังงา": [8.45, 98.53], "ภูเก็ต": [7.88, 98.39],
+      "กระบี่": [8.09, 98.91], "นครศรีธรรมราช": [8.43, 99.96], "ตรัง": [7.56, 99.61], "พัทลุง": [7.62, 100.08],
+      "สตูล": [6.62, 100.07], "สงขลา": [7.19, 100.60], "ปัตตานี": [6.87, 101.25], "ยะลา": [6.54, 101.28], "นราธิวาส": [6.43, 101.82]
+    };
+
+    // Assignments map
+    let provinceDataMap = {
+      "เชียงใหม่": { team: "ทีมสีเขียวสด", color: "#22c55e", status: "DONE", startDate: "2026-11-02", endDate: "2026-11-06", targetUnits: 40 },
+      "เชียงราย": { team: "ทีมสีส้ม 1", color: "#f97316", status: "DONE", startDate: "2026-11-02", endDate: "2026-11-06", targetUnits: 30 },
+      "น่าน": { team: "ทีมสีชมพูม่วง", color: "#c084fc", status: "DONE", startDate: "2026-11-03", endDate: "2026-11-07", targetUnits: 25 },
+      "กรุงเทพมหานคร": { team: "ทีมสีแดงส้ม", color: "#ef4444", status: "DONE", startDate: "2026-11-02", endDate: "2026-11-08", targetUnits: 100 },
+      "นนทบุรี": { team: "ทีมสีชมพูม่วง", color: "#c084fc", status: "DONE", startDate: "2026-11-03", endDate: "2026-11-07", targetUnits: 45 },
+      "ขอนแก่น": { team: "ทีมสีส้ม 1", color: "#f97316", status: "DONE", startDate: "2026-11-02", endDate: "2026-11-06", targetUnits: 50 },
+      "นครราชสีมา": { team: "ทีมสีชมพูม่วง", color: "#c084fc", status: "DONE", startDate: "2026-11-02", endDate: "2026-11-07", targetUnits: 60 },
+      "ชลบุรี": { team: "ทีมสีฟ้ามิ้นต์", color: "#38bdf8", status: "DONE", startDate: "2026-11-03", endDate: "2026-11-07", targetUnits: 55 },
+      "ภูเก็ต": { team: "ทีมสีน้ำเงินม่วง", color: "#4f46e5", status: "DONE", startDate: "2026-11-02", endDate: "2026-11-06", targetUnits: 35 },
+      "สงขลา": { team: "ทีมสีเหลืองทอง", color: "#facc15", status: "IN_PROGRESS", startDate: "2026-11-04", endDate: "2026-11-08", targetUnits: 40 }
+    };
+
+    let activeMapColorMode = 'team';
+    let selectedTeamFilter = null;
+    let leafletMapInstance = null;
+    let geojsonLayer = null;
+    let rawGeojsonData = null;
+
+    let calendarCurrentDate = new Date(2026, 10, 1);
+    let questionnairesList = [];
+
+    // =========================================================================
+    // 2. TAB MANAGEMENT
+    // =========================================================================
+    function switchTab(targetId) {
+      document.querySelectorAll('.tab-section').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-tab-btn').forEach(el => el.classList.remove('active'));
+
+      document.getElementById(targetId).classList.add('active');
+      document.getElementById(`btn-${targetId}`).classList.add('active');
+
+      if (targetId === 'tab1') {
+        setTimeout(() => {
+          if (leafletMapInstance) leafletMapInstance.invalidateSize();
+        }, 150);
+      } else if (targetId === 'tab2') {
+        if (questionnairesList.length === 0) loadMockData();
+        else redrawAllCharts();
+      } else if (targetId === 'tab3') {
+        renderCalendar();
+      }
+    }
+
+    // =========================================================================
+    // 3. TAB 1: LEAFLET.JS & GEOJSON ENGINE
+    // =========================================================================
+    function initLeafletMap() {
+      if (leafletMapInstance) return;
+
+      leafletMapInstance = L.map('leafletMap', {
+        center: [13.2, 101.0],
+        zoom: 6,
+        minZoom: 5,
+        maxZoom: 12
+      });
+
+      // ใช้ Esri World Light Gray Base Map (ไม่มีลายน้ำ และไม่ติด 403 Access Blocked)
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ | สนค. กระทรวงพาณิชย์',
+        maxZoom: 16
+      }).addTo(leafletMapInstance);
+
+      loadThailandGeoJSON();
+    }
+
+    // Load GeoJSON with fallback to prevent sandbox freeze
+    async function loadThailandGeoJSON() {
+      // 1. URLs list (Reliable fast CDNs)
+      const geojsonUrls = [
+        'https://raw.githubusercontent.com/apisit/thailand.json/master/thailandwithdensity.json',
+        'https://raw.githubusercontent.com/apisit/thailand.json/master/thailandWithName.json'
+      ];
+
+      let loaded = false;
+
+      for (const url of geojsonUrls) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout
+
+          const resp = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          if (resp.ok) {
+            rawGeojsonData = await resp.json();
+            renderGeoJsonLayer(rawGeojsonData);
+            loaded = true;
+            break;
+          }
+        } catch (e) {
+          console.warn("GeoJSON remote fetch failed or timed out, trying next...", e);
+        }
+      }
+
+      // If network fails (e.g., iframe sandboxed), construct robust in-memory boundary polygons
+      if (!loaded) {
+        console.info("Using embedded Thailand Boundary Geometries fallback.");
+        rawGeojsonData = buildFallbackThailandGeoJSON();
+        renderGeoJsonLayer(rawGeojsonData);
+      }
+    }
+
+    // Fallback GeoJSON generator for 77 provinces
+    function buildFallbackThailandGeoJSON() {
+      const features = [];
+      Object.keys(THAI_PROV_CENTROIDS).forEach(pName => {
+        const [lat, lng] = THAI_PROV_CENTROIDS[pName];
+        const dLat = 0.28, dLng = 0.28;
+        features.push({
+          type: "Feature",
+          properties: { name: pName, CHA_NE: pName, province: pName },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [lng - dLng, lat - dLat * 0.7],
+              [lng + dLng * 0.9, lat - dLat],
+              [lng + dLng, lat + dLat * 0.8],
+              [lng - dLng * 0.8, lat + dLat],
+              [lng - dLng, lat - dLat * 0.7]
+            ]]
+          }
+        });
+      });
+      return { type: "FeatureCollection", features: features };
+    }
+
+    function normalizeProvinceName(feature) {
+      const p = feature.properties || {};
+      const raw = p.name || p.NAME_1 || p.CHA_NE || p.province || p.th_name || '';
+      if (EN_TO_TH_PROVINCES[raw]) return EN_TO_TH_PROVINCES[raw];
+      for (const en of Object.keys(EN_TO_TH_PROVINCES)) {
+        if (raw.toLowerCase().includes(en.toLowerCase())) return EN_TO_TH_PROVINCES[en];
+      }
+      return raw;
+    }
+
+    function renderGeoJsonLayer(geojson) {
+      if (geojsonLayer && leafletMapInstance) {
+        leafletMapInstance.removeLayer(geojsonLayer);
+      }
+
+      geojsonLayer = L.geoJSON(geojson, {
+        style: styleFeature,
+        onEachFeature: onEachFeature
+      }).addTo(leafletMapInstance);
+
+      updateStatsAndLegend();
+    }
+
+    function styleFeature(feature) {
+      const pName = normalizeProvinceName(feature);
+      const record = provinceDataMap[pName];
+
+      let fillColor = "#cbd5e1";
+      let fillOpacity = 0.75;
+      let strokeColor = "#ffffff";
+      let weight = 1.2;
+
+      if (record) {
+        fillColor = (activeMapColorMode === 'team') ? record.color :
+                    (record.status === 'DONE' ? '#10b981' : (record.status === 'IN_PROGRESS' ? '#f59e0b' : '#64748b'));
+      }
+
+      if (selectedTeamFilter !== null) {
+        if (record && record.team === selectedTeamFilter) {
+          fillOpacity = 0.95;
+          strokeColor = "#0f172a";
+          weight = 2.5;
+        } else {
+          fillOpacity = 0.15;
+          weight = 0.6;
+        }
+      }
+
+      return {
+        fillColor: fillColor,
+        weight: weight,
+        opacity: 1,
+        color: strokeColor,
+        fillOpacity: fillOpacity
+      };
+    }
+
+    function onEachFeature(feature, layer) {
+      const pName = normalizeProvinceName(feature);
+      const record = provinceDataMap[pName];
+      const teamText = record ? record.team : "ยังไม่มีทีมลงพื้นที่";
+      const statusText = record ? (record.status === 'DONE' ? 'เสร็จสิ้น' : (record.status === 'IN_PROGRESS' ? 'กำลังดำเนินการ' : 'วางแผน')) : "ยังไม่เริ่มสำรวจ";
+      const targetText = record && record.targetUnits ? `<br>เป้าหมาย: ${record.targetUnits} ยูนิต` : '';
+
+      layer.bindTooltip(`
+        <strong>📍 จ.${pName}</strong><br>
+        ทีมสำรวจ: ${teamText}<br>
+        สถานะ: ${statusText}${targetText}<br>
+        <small style="color:#94a3b8;">(คลิกเพื่อแก้ไขข้อมูลจังหวัดนี้)</small>
+      `, { sticky: true, className: 'custom-th-tooltip' });
+
+      layer.on({
+        mouseover: (e) => {
+          const l = e.target;
+          l.setStyle({ weight: 3, color: '#0f172a' });
+          if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+            l.bringToFront();
+          }
+        },
+        mouseout: (e) => {
+          if (geojsonLayer) geojsonLayer.resetStyle(e.target);
+        },
+        click: () => {
+          openAssignmentModal(pName);
+        }
+      });
+    }
+
+    function updateStatsAndLegend() {
+      let count = 0;
+      const teamStats = {};
+
+      Object.keys(provinceDataMap).forEach(p => {
+        const item = provinceDataMap[p];
+        if (item) {
+          count++;
+          if (!teamStats[item.team]) teamStats[item.team] = { color: item.color, count: 0 };
+          teamStats[item.team].count++;
+        }
+      });
+
+      document.getElementById('txt-coverage-stat').innerText = `${count} / 77 จังหวัด`;
+      document.getElementById('progress-bar-fill').style.width = `${Math.round((count / 77) * 100)}%`;
+
+      const listEl = document.getElementById('teamSelectionList');
+      listEl.innerHTML = '';
+      const teams = Object.keys(teamStats);
+      document.getElementById('txt-team-count-badge').innerText = `${teams.length} ทีม`;
+
+      teams.forEach(tName => {
+        const btn = document.createElement('div');
+        btn.className = `team-item-btn ${selectedTeamFilter === tName ? 'selected' : ''}`;
+        
+        // Escape special chars safely for inline handlers
+        const safeName = encodeURIComponent(tName);
+        const safeColor = encodeURIComponent(teamStats[tName].color);
+
+        btn.innerHTML = `
+          <div style="display:flex; align-items:center; flex:1; min-width:0;" onclick="selectTeamFilter('${tName.replace(/'/g, "\\'")}')">
+            <span class="color-swatch" style="background:${teamStats[tName].color}"></span>
+            <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${tName}</strong>
+          </div>
+          <div class="team-actions">
+            <span style="color:var(--text-muted); font-size:0.75rem; font-weight:700; margin-right:4px;">${teamStats[tName].count} จว.</span>
+            <button type="button" class="btn-team-icon" title="แก้ไขชื่อและสีทีม" onclick="event.stopPropagation(); openEditTeamModal(decodeURIComponent('${safeName}'), decodeURIComponent('${safeColor}'))">✏️</button>
+            <button type="button" class="btn-team-icon delete" title="ลบทีมนี้ออกจากทุกจังหวัด" onclick="event.stopPropagation(); requestDeleteTeam(decodeURIComponent('${safeName}'))">🗑️</button>
+          </div>
+        `;
+        listEl.appendChild(btn);
+      });
+
+      document.getElementById('btnShowAllTeams').classList.toggle('active', selectedTeamFilter === null);
+    }
+
+    // Custom In-App Confirmation Handler
+    let deleteCallback = null;
+
+    function showConfirmModal(title, message, onConfirm) {
+      document.getElementById('confirmDeleteTitle').innerText = title;
+      document.getElementById('confirmDeleteMsg').innerText = message;
+      deleteCallback = onConfirm;
+      document.getElementById('modalConfirmDelete').style.display = 'flex';
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('modalConfirmDelete').style.display = 'none';
+      deleteCallback = null;
+    }
+
+    document.getElementById('btnExecuteDelete').addEventListener('click', () => {
+      if (deleteCallback) {
+        deleteCallback();
+      }
+      closeConfirmModal();
+    });
+
+    // Request Delete Team
+    function requestDeleteTeam(teamName) {
+      showConfirmModal(
+        'ยืนยันการลบทีมสำรวจ',
+        `คุณต้องการลบ "${teamName}" ออกจากระบบและยกเลิกภารกิจทุกจังหวัดที่ทีมนี้ดูแลหรือไม่?`,
+        () => {
+          Object.keys(provinceDataMap).forEach(prov => {
+            if (provinceDataMap[prov].team === teamName) {
+              delete provinceDataMap[prov];
+            }
+          });
+
+          if (selectedTeamFilter === teamName) selectedTeamFilter = null;
+
+          if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+          updateStatsAndLegend();
+          renderCalendar();
+        }
+      );
+    }
+
+    // Modal Edit Team Batch
+    function openEditTeamModal(teamName, currentColor) {
+      document.getElementById('editOldTeamName').value = teamName;
+      document.getElementById('editTeamNameInput').value = teamName;
+      document.getElementById('editTeamColorInput').value = currentColor;
+      document.getElementById('modalEditTeamHeading').innerText = `✏️ แก้ไขทีม: ${teamName}`;
+      document.getElementById('modalEditTeam').style.display = 'flex';
+    }
+
+    function closeEditTeamModal() {
+      document.getElementById('modalEditTeam').style.display = 'none';
+    }
+
+    function saveEditTeamForm(e) {
+      e.preventDefault();
+      const oldName = document.getElementById('editOldTeamName').value;
+      const newName = document.getElementById('editTeamNameInput').value.trim();
+      const newColor = document.getElementById('editTeamColorInput').value;
+
+      if (!newName) return;
+
+      // อัปเดตใน provinceDataMap
+      Object.keys(provinceDataMap).forEach(prov => {
+        if (provinceDataMap[prov].team === oldName) {
+          provinceDataMap[prov].team = newName;
+          provinceDataMap[prov].color = newColor;
+        }
+      });
+
+      // อัปเดตใน questionnairesList
+      questionnairesList.forEach(item => {
+        if (item.team === oldName) item.team = newName;
+      });
+
+      if (selectedTeamFilter === oldName) selectedTeamFilter = newName;
+
+      closeEditTeamModal();
+      if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+      updateStatsAndLegend();
+      refreshSheetTab();
+      renderCalendar();
+    }
+
+    function deleteTeamBatch(teamName) {
+      if (!confirm(`คุณต้องการลบทีม "${teamName}" ออกจากทุกจังหวัดที่รับผิดชอบใช่หรือไม่?`)) return;
+
+      Object.keys(provinceDataMap).forEach(prov => {
+        if (provinceDataMap[prov].team === teamName) {
+          delete provinceDataMap[prov];
+        }
+      });
+
+      if (selectedTeamFilter === teamName) selectedTeamFilter = null;
+
+      if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+      updateStatsAndLegend();
+      renderCalendar();
+    }
+
+    function selectTeamFilter(teamName) {
+      selectedTeamFilter = (selectedTeamFilter === teamName) ? null : teamName;
+      if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+      updateStatsAndLegend();
+    }
+
+    function filterTeamList() {
+      const q = document.getElementById('teamSearchBox').value.toLowerCase();
+      document.querySelectorAll('.team-item-btn').forEach(btn => {
+        btn.style.display = btn.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
+      });
+    }
+
+    function setColorDisplayMode(mode) {
+      activeMapColorMode = mode;
+      document.getElementById('mode-team').classList.toggle('active', mode === 'team');
+      document.getElementById('mode-status').classList.toggle('active', mode === 'status');
+      if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+    }
+
+    // =========================================================================
+    // 6. MODAL ASSIGNMENT & FULL PROVINCE EDITING
+    // =========================================================================
+    function openAssignmentModal(defaultProvince = '') {
+      const select = document.getElementById('modalProvSelect');
+      select.innerHTML = '<option value="">-- กรุณาเลือกจังหวัด --</option>';
+
+      THAILAND_REGIONS.forEach(r => {
+        const group = document.createElement('optgroup');
+        group.label = r.region;
+        r.list.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p; opt.textContent = p;
+          if (p === defaultProvince) opt.selected = true;
+          group.appendChild(opt);
+        });
+        select.appendChild(group);
+      });
+
+      // Populate existing teams dropdown
+      const teamSelect = document.getElementById('modalExistingTeamSelect');
+      teamSelect.innerHTML = '<option value="__NEW__">+ สร้างทีมใหม่ / กำหนดเอง</option>';
+      const currentTeams = {};
+      Object.values(provinceDataMap).forEach(d => {
+        if (d && d.team) currentTeams[d.team] = d.color;
+      });
+      Object.keys(currentTeams).forEach(tName => {
+        const opt = document.createElement('option');
+        opt.value = tName;
+        opt.textContent = `โอนย้ายให้: ${tName}`;
+        opt.dataset.color = currentTeams[tName];
+        teamSelect.appendChild(opt);
+      });
+
+      document.getElementById('modalOriginalProvince').value = defaultProvince;
+      loadProvinceDataToModal(defaultProvince);
+      document.getElementById('modalAssign').style.display = 'flex';
+    }
+
+    function onProvinceSelectChange() {
+      const prov = document.getElementById('modalProvSelect').value;
+      loadProvinceDataToModal(prov);
+    }
+
+    function loadProvinceDataToModal(prov) {
+      const heading = document.getElementById('modalAssignHeading');
+      const delBtn = document.getElementById('btnDeleteProvAssign');
+      const teamSelect = document.getElementById('modalExistingTeamSelect');
+
+      if (prov && provinceDataMap[prov]) {
+        const cur = provinceDataMap[prov];
+        heading.innerText = `✏️ แก้ไขข้อมูลจังหวัด: จ.${prov}`;
+        document.getElementById('modalTeamInput').value = cur.team || '';
+        document.getElementById('modalColorInput').value = cur.color || '#f97316';
+        document.getElementById('modalStartDate').value = cur.startDate || '2026-11-02';
+        document.getElementById('modalEndDate').value = cur.endDate || '2026-11-06';
+        document.getElementById('modalSurveyCompleteDate').value = cur.surveyCompleteDate || cur.endDate || '2026-11-06';
+        document.getElementById('modalStatusSelect').value = cur.status || 'IN_PROGRESS';
+        document.getElementById('modalTargetUnits').value = cur.targetUnits || 30;
+        delBtn.style.display = 'inline-block';
+
+        if ([...teamSelect.options].some(o => o.value === cur.team)) {
+          teamSelect.value = cur.team;
+        } else {
+          teamSelect.value = '__NEW__';
+        }
+      } else {
+        heading.innerText = prov ? `ลงทะเบียน/มอบหมาย: จ.${prov}` : "ลงทะเบียนพื้นที่สำรวจ";
+        document.getElementById('modalTeamInput').value = '';
+        document.getElementById('modalColorInput').value = '#f97316';
+        document.getElementById('modalStartDate').value = '2026-11-02';
+        document.getElementById('modalEndDate').value = '2026-11-06';
+        document.getElementById('modalSurveyCompleteDate').value = '2026-11-06';
+        document.getElementById('modalStatusSelect').value = 'IN_PROGRESS';
+        document.getElementById('modalTargetUnits').value = 30;
+        teamSelect.value = '__NEW__';
+        delBtn.style.display = 'none';
+      }
+      calcDeadlinePreview();
+    }
+
+    function autoUpdateSurveyCompleteDate() {
+      const endVal = document.getElementById('modalEndDate').value;
+      if (endVal) {
+        document.getElementById('modalSurveyCompleteDate').value = endVal;
+        calcDeadlinePreview();
+      }
+    }
+
+    function onExistingTeamSelectChange() {
+      const teamSelect = document.getElementById('modalExistingTeamSelect');
+      const teamInput = document.getElementById('modalTeamInput');
+      const colorInput = document.getElementById('modalColorInput');
+
+      if (teamSelect.value !== '__NEW__') {
+        const selectedOpt = teamSelect.options[teamSelect.selectedIndex];
+        teamInput.value = teamSelect.value;
+        if (selectedOpt && selectedOpt.dataset && selectedOpt.dataset.color) {
+          colorInput.value = selectedOpt.dataset.color;
+        }
+      }
+    }
+
+    function closeAssignmentModal() {
+      document.getElementById('modalAssign').style.display = 'none';
+      document.getElementById('modalOriginalProvince').value = '';
+    }
+
+    function deleteProvinceAssignment() {
+      const p = document.getElementById('modalProvSelect').value || document.getElementById('modalOriginalProvince').value;
+      if (!p || !provinceDataMap[p]) {
+        closeAssignmentModal();
+        return;
+      }
+
+      showConfirmModal(
+        'ยืนยันการลบข้อมูลจังหวัด',
+        `คุณต้องการยกเลิกการมอบหมายงานใน "จ.${p}" หรือไม่?`,
+        () => {
+          delete provinceDataMap[p];
+          closeAssignmentModal();
+          if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+          updateStatsAndLegend();
+          renderCalendar();
+        }
+      );
+    }
+
+    function calcDeadlinePreview() {
+      const compVal = document.getElementById('modalSurveyCompleteDate').value;
+      const previewEl = document.getElementById('modalDeadlinePreview');
+      if (compVal) {
+        const d = new Date(compVal);
+        d.setDate(d.getDate() + 7);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        previewEl.value = `${y}-${m}-${day}`;
+      } else {
+        previewEl.value = '';
+      }
+    }
+
+    function saveAssignmentForm(e) {
+      if (e) e.preventDefault();
+
+      const pSelect = document.getElementById('modalProvSelect');
+      const p = pSelect ? pSelect.value.trim() : '';
+      const originalP = document.getElementById('modalOriginalProvince').value.trim();
+
+      if (!p) {
+        alert('กรุณาเลือกจังหวัดที่ต้องการลงพื้นที่');
+        return false;
+      }
+
+      const teamName = document.getElementById('modalTeamInput').value.trim();
+      if (!teamName) {
+        alert('กรุณากรอกชื่อทีมสำรวจ');
+        document.getElementById('modalTeamInput').focus();
+        return false;
+      }
+
+      const colorVal = document.getElementById('modalColorInput').value || '#f97316';
+      const startDateVal = document.getElementById('modalStartDate').value;
+      const endDateVal = document.getElementById('modalEndDate').value;
+      const completeDateVal = document.getElementById('modalSurveyCompleteDate').value || endDateVal;
+      const statusVal = document.getElementById('modalStatusSelect').value || 'IN_PROGRESS';
+      const targetVal = parseInt(document.getElementById('modalTargetUnits').value, 10) || 30;
+
+      // หากมีการเปลี่ยนจังหวัดเป้าหมายจากเดิม ให้ลบข้อมูลจังหวัดเดิมออกก่อน
+      if (originalP && originalP !== p && provinceDataMap[originalP]) {
+        delete provinceDataMap[originalP];
+      }
+
+      // บันทึกข้อมูลจังหวัดใหม่/อัปเดตจังหวัดเดิม
+      provinceDataMap[p] = {
+        team: teamName,
+        color: colorVal,
+        startDate: startDateVal,
+        endDate: endDateVal,
+        surveyCompleteDate: completeDateVal,
+        status: statusVal,
+        targetUnits: targetVal
+      };
+
+      closeAssignmentModal();
+
+      // อัปเดตการแสดงผลแผนที่ Leaflet และตัวเลขสถิติ
+      if (geojsonLayer) {
+        geojsonLayer.setStyle(styleFeature);
+      }
+      updateStatsAndLegend();
+
+      // อัปเดตปฏิทินปฏิบัติงาน และวันคีย์เสร็จ (+7 วัน)
+      renderCalendar();
+
+      return false;
+    }
+
+    // =========================================================================
+    // 7. TAB 2: GOOGLE SHEETS & CANVAS CHARTS ENGINE
+    // =========================================================================
+    function loadMockData() {
+      questionnairesList = [
+        { date: "2026-11-02", team: "ทีมสีส้ม 1", prov: "เชียงราย", dist: "เมือง", name: "ริมน้ำคอร์ท", type: "หอพัก", rent: 3200, by: "สมศักดิ์" },
+        { date: "2026-11-02", team: "ทีมสีเขียวสด", prov: "เชียงใหม่", dist: "เมือง", name: "ร่มเย็นแมนชั่น", type: "อพาร์ตเมนต์", rent: 4500, by: "วิภาดา" },
+        { date: "2026-11-03", team: "ทีมสีเขียวสด", prov: "เชียงใหม่", dist: "สันทราย", name: "บ้านสวนสันทราย", type: "บ้านเดี่ยว", rent: 8500, by: "วิภาดา" },
+        { date: "2026-11-03", team: "ทีมสีแดงส้ม", prov: "กรุงเทพมหานคร", dist: "จตุจักร", name: "รัชดาเพลส คอนโดเร้นท์", type: "อพาร์ตเมนต์", rent: 6500, by: "เอกชัย" },
+        { date: "2026-11-04", team: "ทีมสีแดงส้ม", prov: "กรุงเทพมหานคร", dist: "บางเขน", name: "ทาวน์เฮาส์พหลโยธิน", type: "ทาวน์เฮาส์", rent: 9500, by: "เอกชัย" },
+        { date: "2026-11-03", team: "ทีมสีชมพูม่วง", prov: "นนทบุรี", dist: "เมือง", name: "งามวงศ์วานเรสซิเดนซ์", type: "อพาร์ตเมนต์", rent: 5200, by: "ศิริพร" },
+        { date: "2026-11-04", team: "ทีมสีชมพูม่วง", prov: "นครราชสีมา", dist: "เมือง", name: "มิตรภาพอพาร์ตเมนต์", type: "อพาร์ตเมนต์", rent: 3800, by: "มนตรี" },
+        { date: "2026-11-04", team: "ทีมสีฟ้ามิ้นต์", prov: "ชลบุรี", dist: "ศรีราชา", name: "ศรีราชาเบย์วิว", type: "อพาร์ตเมนต์", rent: 5800, by: "กัญญา" },
+        { date: "2026-11-05", team: "ทีมสีฟ้ามิ้นต์", prov: "ชลบุรี", dist: "บางละมุง", name: "พัทยาเซ็นทรัลรูม", type: "หอพัก", rent: 4000, by: "กัญญา" },
+        { date: "2026-11-03", team: "ทีมสีน้ำเงินม่วง", prov: "ภูเก็ต", dist: "กะทู้", name: "ป่าตองฮิลล์เรสซิเดนซ์", type: "อพาร์ตเมนต์", rent: 7500, by: "ณัฐวุฒิ" },
+        { date: "2026-11-05", team: "ทีมสีเหลืองทอง", prov: "สงขลา", dist: "หาดใหญ่", name: "หาดใหญ่คอมเพล็กซ์", type: "หอพัก", rent: 3500, by: "ประทีป" }
+      ];
+
+      document.getElementById('txtSyncMsg').innerHTML = `<span style="color:var(--accent-green);">โหลดข้อมูลตัวอย่างแล้ว (${questionnairesList.length} รายการ)</span>`;
+      refreshSheetTab();
+      renderCalendar();
+    }
+
+    async function fetchGoogleSheet() {
+      const url = document.getElementById('inputSheetUrl').value.trim();
+      const statusEl = document.getElementById('txtSyncMsg');
+      if (!url) {
+        statusEl.innerHTML = '<span style="color:#ef4444;">กรุณากรอก URL ของ Google Sheets (Published CSV)</span>';
+        return;
+      }
+
+      statusEl.innerHTML = '<span style="color:var(--primary-accent);">กำลังดึงข้อมูลจาก Google Sheets...</span>';
+
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("ไม่สามารถดาวน์โหลดได้");
+        const csvText = await resp.text();
+        const rows = csvText.trim().split(/\r?\n/).map(line => {
+          return line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
+        });
+
+        if (rows.length < 2) throw new Error("ข้อมูลในชีตว่างเปล่า");
+
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
+
+        const dateIdx = getIdx(['date', 'วัน']);
+        const teamIdx = getIdx(['team', 'ทีม']);
+        const provIdx = getIdx(['province', 'จังหวัด']);
+        const distIdx = getIdx(['district', 'อำเภอ']);
+        const nameIdx = getIdx(['name', 'ชื่อ']);
+        const typeIdx = getIdx(['type', 'ประเภท']);
+        const rentIdx = getIdx(['rent', 'ราคา', 'ค่าเช่า']);
+        const byIdx = getIdx(['surveyor', 'บันทึก', 'ผู้']);
+
+        questionnairesList = rows.slice(1).map(r => ({
+          date: dateIdx >= 0 ? r[dateIdx] : '',
+          team: teamIdx >= 0 ? r[teamIdx] : 'ทีมสำรวจ',
+          prov: provIdx >= 0 ? r[provIdx] : '',
+          dist: distIdx >= 0 ? r[distIdx] : '',
+          name: nameIdx >= 0 ? r[nameIdx] : 'ไม่ระบุชื่อ',
+          type: typeIdx >= 0 ? r[typeIdx] : 'ห้องเช่า',
+          rent: rentIdx >= 0 ? (parseFloat(r[rentIdx].replace(/[^0-9.]/g, '')) || 0) : 0,
+          by: byIdx >= 0 ? r[byIdx] : ''
+        })).filter(item => item.prov);
+
+        statusEl.innerHTML = `<span style="color:var(--accent-green);">อัปเดตข้อมูลสำเร็จ (${questionnairesList.length} รายการ)</span>`;
+        refreshSheetTab();
+        renderCalendar();
+      } catch (err) {
+        statusEl.innerHTML = `<span style="color:#ef4444;">เกิดข้อผิดพลาด: ${err.message} (ตรวจสอบว่า Publish เป็น CSV หรือยัง)</span>`;
+      }
+    }
+
+    function refreshSheetTab() {
+      populateSheetFilterDropdowns();
+      filterSheetTable();
+    }
+
+    function populateSheetFilterDropdowns() {
+      const teamSel = document.getElementById('selFilterTeam');
+      const provSel = document.getElementById('selFilterProv');
+      const typeSel = document.getElementById('selFilterType');
+
+      const teams = [...new Set(questionnairesList.map(d => d.team).filter(Boolean))];
+      const provs = [...new Set(questionnairesList.map(d => d.prov).filter(Boolean))];
+      const types = [...new Set(questionnairesList.map(d => d.type).filter(Boolean))];
+
+      teamSel.innerHTML = '<option value="ALL">-- ทุกทีมสำรวจ --</option>' + teams.map(t => `<option value="${t}">${t}</option>`).join('');
+      provSel.innerHTML = '<option value="ALL">-- ทุกจังหวัด --</option>' + provs.map(p => `<option value="${p}">${p}</option>`).join('');
+      typeSel.innerHTML = '<option value="ALL">-- ทุกประเภทที่พัก --</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+
+    function filterSheetTable() {
+      const t = document.getElementById('selFilterTeam').value;
+      const p = document.getElementById('selFilterProv').value;
+      const tp = document.getElementById('selFilterType').value;
+      const q = document.getElementById('inputTableSearch').value.trim().toLowerCase();
+
+      const filtered = questionnairesList.filter(d => {
+        return (t === 'ALL' || d.team === t) &&
+               (p === 'ALL' || d.prov === p) &&
+               (tp === 'ALL' || d.type === tp) &&
+               (!q || (d.name && d.name.toLowerCase().includes(q)) || (d.dist && d.dist.toLowerCase().includes(q)) || (d.prov && d.prov.toLowerCase().includes(q)));
+      });
+
+      renderKPIs(filtered);
+      renderTableRows(filtered);
+      drawHousingTypeCanvas(filtered);
+      drawTeamRentCanvas(filtered);
+    }
+
+    function renderKPIs(data) {
+      document.getElementById('kpi-total-records').innerText = data.length.toLocaleString();
+      const rents = data.map(d => d.rent).filter(r => r > 0);
+      if (rents.length > 0) {
+        const sum = rents.reduce((a, b) => a + b, 0);
+        const avg = Math.round(sum / rents.length);
+        const min = Math.min(...rents);
+        const max = Math.max(...rents);
+        document.getElementById('kpi-avg-rent').innerText = `${avg.toLocaleString()} ฿`;
+        document.getElementById('kpi-rent-span').innerText = `${min.toLocaleString()} - ${max.toLocaleString()} ฿`;
+      } else {
+        document.getElementById('kpi-avg-rent').innerText = `0 ฿`;
+        document.getElementById('kpi-rent-span').innerText = `0 - 0 ฿`;
+      }
+
+      const pCount = new Set(data.map(d => d.prov).filter(Boolean)).size;
+      document.getElementById('kpi-prov-count').innerText = pCount;
+    }
+
+    function renderTableRows(data) {
+      const tbody = document.getElementById('sheetTableBody');
+      tbody.innerHTML = '';
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</td></tr>';
+        return;
+      }
+
+      data.forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${d.date || '-'}</td>
+          <td><strong>${d.team || '-'}</strong></td>
+          <td>${d.prov || '-'}</td>
+          <td>${d.dist || '-'}</td>
+          <td>${d.name || '-'}</td>
+          <td><span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;">${d.type || '-'}</span></td>
+          <td style="font-weight:700; color:var(--primary);">${(d.rent || 0).toLocaleString()}</td>
+          <td>${d.by || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Pure Canvas Donut Chart (Zero Dependency)
+    function drawHousingTypeCanvas(data) {
+      const canvas = document.getElementById('housingTypeCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const counts = {};
+      data.forEach(d => {
+        const type = d.type || 'อื่นๆ';
+        counts[type] = (counts[type] || 0) + 1;
+      });
+
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      if (total === 0) {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px Sarabun, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ไม่มีข้อมูลที่อยู่อาศัย', w / 2, h / 2);
+        return;
+      }
+
+      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
+      const cx = w * 0.35;
+      const cy = h / 2;
+      const radius = Math.min(cx, cy) - 15;
+      const innerRadius = radius * 0.55;
+
+      let startAngle = -Math.PI / 2;
+      let cIdx = 0;
+      const labels = Object.keys(counts);
+
+      labels.forEach(type => {
+        const val = counts[type];
+        const sliceAngle = (val / total) * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle);
+        ctx.arc(cx, cy, innerRadius, startAngle + sliceAngle, startAngle, true);
+        ctx.closePath();
+        ctx.fillStyle = colors[cIdx % colors.length];
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        startAngle += sliceAngle;
+        cIdx++;
+      });
+
+      // Legend on the right
+      const legendX = w * 0.62;
+      let legendY = 25;
+      ctx.font = '12px Sarabun, sans-serif';
+      ctx.textAlign = 'left';
+
+      labels.forEach((type, i) => {
+        const val = counts[type];
+        const pct = Math.round((val / total) * 100);
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(legendX, legendY, 12, 12);
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText(`${type} (${pct}%)`, legendX + 18, legendY + 10);
+        legendY += 22;
+      });
+    }
+
+    // Pure Canvas Bar Chart (Zero Dependency)
+    function drawTeamRentCanvas(data) {
+      const canvas = document.getElementById('teamRentCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const teamRents = {};
+      data.forEach(d => {
+        if (!teamRents[d.team]) teamRents[d.team] = [];
+        if (d.rent > 0) teamRents[d.team].push(d.rent);
+      });
+
+      const teams = Object.keys(teamRents);
+      if (teams.length === 0) {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px Sarabun, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ไม่มีข้อมูลค่าเช่า', w / 2, h / 2);
+        return;
+      }
+
+      const avgs = teams.map(t => {
+        const arr = teamRents[t];
+        return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+      });
+
+      const maxVal = Math.max(...avgs, 1000);
+      const paddingLeft = 45;
+      const paddingBottom = 40;
+      const chartW = w - paddingLeft - 20;
+      const chartH = h - paddingBottom - 20;
+
+      // Draw Grid Lines
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10px Sarabun, sans-serif';
+      ctx.textAlign = 'right';
+
+      for (let i = 0; i <= 4; i++) {
+        const yVal = Math.round((maxVal / 4) * i);
+        const y = h - paddingBottom - (chartH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(w - 20, y);
+        ctx.stroke();
+        ctx.fillText(`${yVal}`, paddingLeft - 6, y + 3);
+      }
+
+      // Draw Bars
+      const barW = Math.min(36, (chartW / teams.length) * 0.65);
+      const gap = chartW / teams.length;
+
+      teams.forEach((team, i) => {
+        const avg = avgs[i];
+        const barH = (avg / maxVal) * chartH;
+        const x = paddingLeft + (gap * i) + (gap - barW) / 2;
+        const y = h - paddingBottom - barH;
+
+        ctx.fillStyle = '#1e3a8a';
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]) : ctx.rect(x, y, barW, barH);
+        ctx.fill();
+
+        // Label on top of bar
+        ctx.fillStyle = '#0f172a';
+        ctx.font = '10px Sarabun, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${avg}`, x + barW / 2, y - 4);
+
+        // Team Name bottom
+        ctx.fillStyle = '#64748b';
+        ctx.font = '10px Sarabun, sans-serif';
+        const truncated = team.length > 7 ? team.slice(0, 6) + '..' : team;
+        ctx.fillText(truncated, x + barW / 2, h - paddingBottom + 16);
+      });
+    }
+
+    function redrawAllCharts() {
+      const filtered = getCurrentlyFilteredData();
+      drawHousingTypeCanvas(filtered);
+      drawTeamRentCanvas(filtered);
+    }
+
+    function getCurrentlyFilteredData() {
+      const t = document.getElementById('selFilterTeam') ? document.getElementById('selFilterTeam').value : 'ALL';
+      const p = document.getElementById('selFilterProv') ? document.getElementById('selFilterProv').value : 'ALL';
+      const tp = document.getElementById('selFilterType') ? document.getElementById('selFilterType').value : 'ALL';
+      const q = document.getElementById('inputTableSearch') ? document.getElementById('inputTableSearch').value.trim().toLowerCase() : '';
+
+      return questionnairesList.filter(d => {
+        return (t === 'ALL' || d.team === t) &&
+               (p === 'ALL' || d.prov === p) &&
+               (tp === 'ALL' || d.type === tp) &&
+               (!q || (d.name && d.name.toLowerCase().includes(q)) || (d.dist && d.dist.toLowerCase().includes(q)) || (d.prov && d.prov.toLowerCase().includes(q)));
+      });
+    }
+
+    function exportDataCSV() {
+      const data = getCurrentlyFilteredData();
+      if (data.length === 0) {
+        alert('ไม่มีข้อมูลสำหรับ Export');
+        return;
+      }
+
+      let csv = '\uFEFFวันที่เก็บ,ทีมสำรวจ,จังหวัด,อำเภอ,ชื่อที่พัก,ประเภท,ค่าเช่า(บาท),ผู้บันทึก\n';
+      data.forEach(d => {
+        csv += `"${d.date}","${d.team}","${d.prov}","${d.dist}","${d.name}","${d.type}",${d.rent},"${d.by}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `survey_rent_tpso_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // =========================================================================
+    // 8. TAB 3: CALENDAR ENGINE (+7 DAYS DEADLINE)
+    // =========================================================================
+    const THAI_MONTH_NAMES = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+    function renderCalendar() {
+      const container = document.getElementById('calendarBodyGrid');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const y = calendarCurrentDate.getFullYear();
+      const m = calendarCurrentDate.getMonth();
+
+      document.getElementById('calendarTitleText').innerText = `${THAI_MONTH_NAMES[m]} ${y + 543}`;
+
+      // 7 Days of Week headers
+      const weekTitles = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+      weekTitles.forEach(w => {
+        const head = document.createElement('div');
+        head.className = 'cal-day-title';
+        head.innerText = w;
+        container.appendChild(head);
+      });
+
+      const firstDayIdx = new Date(y, m, 1).getDay();
+      const lastDate = new Date(y, m + 1, 0).getDate();
+
+      // Empty padding days
+      for (let i = 0; i < firstDayIdx; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'cal-cell-box empty';
+        container.appendChild(emptyCell);
+      }
+
+      // Populate Calendar Days
+      for (let d = 1; d <= lastDate; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell-box';
+        const dateString = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+        const badge = document.createElement('div');
+        badge.className = 'cal-date-badge';
+        badge.innerHTML = `<span>${d}</span>`;
+        cell.appendChild(badge);
+
+        const eventsWrap = document.createElement('div');
+        eventsWrap.className = 'cal-events-wrap';
+
+        const dayEvents = [];
+
+        // 1. ลงพื้นที่สำรวจ (จาก provinceDataMap)
+        Object.keys(provinceDataMap).forEach(prov => {
+          const item = provinceDataMap[prov];
+          if (dateString >= item.startDate && dateString <= item.endDate) {
+            dayEvents.push({
+              type: 'fieldwork',
+              color: item.color || '#3b82f6',
+              text: `📍 [${item.team}] ลงพื้นที่ ${prov}`,
+              title: `[${item.team}] ลงพื้นที่ จ.${prov} (เป้าหมาย ${item.targetUnits || 30} ยูนิต)`
+            });
+          }
+
+          // คำนวณวันกำหนดคีย์แบบสอบถามเสร็จอัตโนมัติ (+7 วันจากวันที่เก็บแบบสอบถามเสร็จ)
+          const compDateStr = item.surveyCompleteDate || item.endDate;
+          if (compDateStr) {
+            const compDate = new Date(compDateStr);
+            const provDeadline = new Date(compDate);
+            provDeadline.setDate(compDate.getDate() + 7); // +7 วัน (1 สัปดาห์)
+            const provDeadlineStr = `${provDeadline.getFullYear()}-${String(provDeadline.getMonth() + 1).padStart(2, '0')}-${String(provDeadline.getDate()).padStart(2, '0')}`;
+
+            if (provDeadlineStr === dateString) {
+              dayEvents.push({
+                type: 'deadline',
+                color: '#10b981',
+                text: `✅ กำหนด [${item.team}] คีย์แบบสอบถามเสร็จ (${prov})`,
+                title: `กำหนดให้ทีม ${item.team} คีย์แบบสอบถาม จ.${prov} เข้าระบบเสร็จสิ้นภายในวันนี้ (+7 วันหลังวันเก็บแบบสอบถาม)`
+              });
+            }
+          }
+        });
+
+        // 2. กำหนดคีย์เสร็จจากรายการใน Google Sheets (questionnairesList)
+        questionnairesList.forEach(rec => {
+          if (rec.date) {
+            const recDate = new Date(rec.date);
+            const deadline = new Date(recDate);
+            deadline.setDate(recDate.getDate() + 7); // + 1 อาทิตย์
+
+            const deadlineString = `${deadline.getFullYear()}-${String(deadline.getMonth() + 1).padStart(2, '0')}-${String(deadline.getDate()).padStart(2, '0')}`;
+
+            if (deadlineString === dateString) {
+              dayEvents.push({
+                type: 'deadline',
+                color: '#10b981',
+                text: `✅ [${rec.team}] คีย์เสร็จ (${rec.name || rec.prov})`,
+                title: `วันที่ ${rec.team} คีย์แบบสอบถามเสร็จ (${rec.prov} - ${rec.name})`
+              });
+            }
+          }
+        });
+
+        // จำกัดให้แสดงสูงสุด 3 รายการเพื่อให้อยู่ในกรอบอย่างสวยงาม
+        const MAX_DISPLAY = 3;
+        const visibleEvents = dayEvents.slice(0, MAX_DISPLAY);
+
+        visibleEvents.forEach(evt => {
+          const pill = document.createElement('div');
+          pill.className = `badge-event-pill ${evt.type === 'deadline' ? 'deadline' : ''}`;
+          pill.style.background = evt.color;
+          pill.title = `${evt.title} (คลิกเพื่อดู/แก้ไข)`;
+          pill.innerText = evt.text;
+          pill.onclick = (e) => {
+            e.stopPropagation();
+            openDayTasksModal(dateString, d);
+          };
+          eventsWrap.appendChild(pill);
+        });
+
+        // หากมีมากกว่า 3 รายการ ให้แสดงปุ่ม +อีก X รายการ
+        if (dayEvents.length > MAX_DISPLAY) {
+          const moreCount = dayEvents.length - MAX_DISPLAY;
+          const moreBtn = document.createElement('div');
+          moreBtn.className = 'cal-more-btn';
+          moreBtn.innerText = `+ อีก ${moreCount} รายการ`;
+          moreBtn.title = `คลิกเพื่อดูภารกิจทั้งหมด (${dayEvents.length} รายการ)`;
+          moreBtn.onclick = (e) => {
+            e.stopPropagation();
+            openDayTasksModal(dateString, d);
+          };
+          eventsWrap.appendChild(moreBtn);
+        }
+
+        cell.appendChild(eventsWrap);
+
+        cell.onclick = () => openDayTasksModal(dateString, d);
+        container.appendChild(cell);
+      }
+    }
+
+    function stepCalMonth(delta) {
+      calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function setCalToCurrentMonth() {
+      calendarCurrentDate = new Date(2026, 10, 1);
+      renderCalendar();
+    }
+
+    // Modal: Open & Render All Tasks for Selected Day
+    function openDayTasksModal(dateStr, dayNum) {
+      const modal = document.getElementById('modalDayTasks');
+      const heading = document.getElementById('modalDayTasksHeading');
+      const sub = document.getElementById('modalDayTasksSub');
+      const list = document.getElementById('modalDayTasksList');
+
+      const dateObj = new Date(dateStr);
+      const mIdx = dateObj.getMonth();
+      const yStr = dateObj.getFullYear() + 543;
+      heading.innerText = `📅 ภารกิจวันที่ ${dayNum} ${THAI_MONTH_NAMES[mIdx]} ${yStr}`;
+      sub.innerText = `รหัสวันที่: ${dateStr}`;
+      list.innerHTML = '';
+
+      // 1. ค้นหาภารกิจลงพื้นที่
+      const fieldworkItems = [];
+      Object.keys(provinceDataMap).forEach(prov => {
+        const it = provinceDataMap[prov];
+        if (dateStr >= it.startDate && dateStr <= it.endDate) {
+          fieldworkItems.push({ prov, ...it });
+        }
+      });
+
+      // 2. ค้นหาภารกิจกำหนดคีย์เสร็จ (+7 วัน)
+      const deadlineItems = [];
+      questionnairesList.forEach((rec, idx) => {
+        if (rec.date) {
+          const dt = new Date(rec.date);
+          dt.setDate(dt.getDate() + 7);
+          const deadlineStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+          if (deadlineStr === dateStr) {
+            deadlineItems.push({ index: idx, rec, deadlineStr });
+          }
+        }
+      });
+
+      if (fieldworkItems.length === 0 && deadlineItems.length === 0) {
+        list.innerHTML = `
+          <div style="text-align: center; padding: 30px 10px; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 6px;">🍃</div>
+            <p>ไม่มีภารกิจการลงพื้นที่หรือกำหนดคีย์แบบสอบถามในวันนี้</p>
+          </div>
+        `;
+        modal.style.display = 'flex';
+        return;
+      }
+
+      // Render Fieldwork section
+      if (fieldworkItems.length > 0) {
+        const sec1 = document.createElement('div');
+        sec1.innerHTML = `<h4 style="font-size: 0.9rem; font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">📍 ภารกิจลงพื้นที่สำรวจ (${fieldworkItems.length} จังหวัด)</h4>`;
+        
+        fieldworkItems.forEach(item => {
+          const card = document.createElement('div');
+          card.style.cssText = "background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;";
+          
+          const statusBadge = item.status === 'DONE' 
+            ? '<span style="background:#dcfce7; color:#15803d; font-size:0.72rem; padding:2px 6px; border-radius:4px; font-weight:600;">เสร็จสิ้น</span>'
+            : (item.status === 'IN_PROGRESS' 
+                ? '<span style="background:#fef3c7; color:#b45309; font-size:0.72rem; padding:2px 6px; border-radius:4px; font-weight:600;">กำลังลงพื้นที่</span>' 
+                : '<span style="background:#e2e8f0; color:#475569; font-size:0.72rem; padding:2px 6px; border-radius:4px; font-weight:600;">วางแผน</span>');
+
+          card.innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0;">
+              <span style="width: 14px; height: 14px; border-radius: 4px; background: ${item.color || '#3b82f6'}; margin-top: 3px; flex-shrink: 0;"></span>
+              <div>
+                <div style="font-size: 0.92rem; font-weight: 700;">จ.${item.prov} &bull; <span style="font-weight: 600; color: #334155;">${item.team}</span> ${statusBadge}</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                  ช่วงเวลา: ${item.startDate} ถึง ${item.endDate} | เป้าหมาย: <strong>${item.targetUnits || 30}</strong> ยูนิต
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <button type="button" class="btn-demo" style="padding: 4px 10px; font-size: 0.8rem;" onclick="closeDayTasksModal(); openAssignmentModal('${item.prov}')">✏️ แก้ไข</button>
+              <button type="button" class="btn-team-icon delete" style="padding: 4px 8px; border: 1px solid #fecaca; border-radius: 6px;" title="ลบภารกิจนี้" onclick="deleteFieldworkFromCal('${item.prov}', '${dateStr}', ${dayNum})">🗑️ ลบ</button>
+            </div>
+          `;
+          sec1.appendChild(card);
+        });
+        list.appendChild(sec1);
+      }
+
+      // Render Deadline section
+      if (deadlineItems.length > 0) {
+        const sec2 = document.createElement('div');
+        sec2.innerHTML = `<h4 style="font-size: 0.9rem; font-weight: 700; color: #047857; margin-bottom: 8px; margin-top: 6px; display: flex; align-items: center; gap: 6px;">✅ วันกำหนดคีย์แบบสอบถามเสร็จ (+7 วัน) (${deadlineItems.length} รายการ)</h4>`;
+        
+        deadlineItems.forEach(item => {
+          const rec = item.rec;
+          const card = document.createElement('div');
+          card.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;";
+
+          card.innerHTML = `
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 0.9rem; font-weight: 700; color: #065f46;">
+                ${rec.team} &bull; ${rec.name} (${rec.prov})
+              </div>
+              <div style="font-size: 0.78rem; color: #047857; margin-top: 2px;">
+                ประเภท: <strong>${rec.type}</strong> | ค่าเช่า: <strong>${(rec.rent || 0).toLocaleString()} ฿/ด.</strong> | วันที่สำรวจ: ${rec.date} (ครบ +7 วันวันนี้)
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <button type="button" class="btn-demo" style="padding: 4px 10px; font-size: 0.8rem; background: white;" onclick="openEditQuestionnaireModal(${item.index}, '${dateStr}', ${dayNum})">✏️ แก้ไข</button>
+              <button type="button" class="btn-team-icon delete" style="padding: 4px 8px; border: 1px solid #fecaca; border-radius: 6px; background: white;" title="ลบแบบสอบถามนี้" onclick="deleteQuestionnaireFromCal(${item.index}, '${dateStr}', ${dayNum})">🗑️ ลบ</button>
+            </div>
+          `;
+          sec2.appendChild(card);
+        });
+        list.appendChild(sec2);
+      }
+
+      modal.style.display = 'flex';
+    }
+
+    function closeDayTasksModal() {
+      document.getElementById('modalDayTasks').style.display = 'none';
+    }
+
+    // Delete fieldwork province directly from calendar day modal
+    function deleteFieldworkFromCal(prov, dateStr, dayNum) {
+      showConfirmModal(
+        'ยืนยันการลบภารกิจลงพื้นที่',
+        `คุณต้องการลบ/ยกเลิกงานสำรวจของ "จ.${prov}" หรือไม่?`,
+        () => {
+          delete provinceDataMap[prov];
+          if (geojsonLayer) geojsonLayer.setStyle(styleFeature);
+          updateStatsAndLegend();
+          renderCalendar();
+          openDayTasksModal(dateStr, dayNum); // refresh modal
+        }
+      );
+    }
+
+    // Open Quick Edit Questionnaire Modal
+    let activeEditDateContext = null;
+
+    function openEditQuestionnaireModal(idx, dateStr, dayNum) {
+      activeEditDateContext = { dateStr, dayNum };
+      const rec = questionnairesList[idx];
+      if (!rec) return;
+
+      document.getElementById('editQIndex').value = idx;
+      document.getElementById('editQTeam').value = rec.team || '';
+      document.getElementById('editQProv').value = rec.prov || '';
+      document.getElementById('editQDist').value = rec.dist || '';
+      document.getElementById('editQName').value = rec.name || '';
+      document.getElementById('editQType').value = rec.type || 'อพาร์ตเมนต์';
+      document.getElementById('editQRent').value = rec.rent || 0;
+      document.getElementById('editQDate').value = rec.date || '';
+      document.getElementById('editQBy').value = rec.by || '';
+
+      document.getElementById('modalEditQuestionnaire').style.display = 'flex';
+    }
+
+    function closeEditQuestionnaireModal() {
+      document.getElementById('modalEditQuestionnaire').style.display = 'none';
+    }
+
+    function saveEditQuestionnaireForm(e) {
+      e.preventDefault();
+      const idx = parseInt(document.getElementById('editQIndex').value, 10);
+      if (isNaN(idx) || !questionnairesList[idx]) return;
+
+      questionnairesList[idx] = {
+        team: document.getElementById('editQTeam').value.trim(),
+        prov: document.getElementById('editQProv').value.trim(),
+        dist: document.getElementById('editQDist').value.trim(),
+        name: document.getElementById('editQName').value.trim(),
+        type: document.getElementById('editQType').value,
+        rent: parseFloat(document.getElementById('editQRent').value) || 0,
+        date: document.getElementById('editQDate').value,
+        by: document.getElementById('editQBy').value.trim()
+      };
+
+      closeEditQuestionnaireModal();
+      refreshSheetTab();
+      renderCalendar();
+
+      // Refresh Day Tasks modal if it was open
+      if (activeEditDateContext) {
+        openDayTasksModal(activeEditDateContext.dateStr, activeEditDateContext.dayNum);
+      }
+    }
+
+    function deleteQuestionnaireFromCal(idx, dateStr, dayNum) {
+      const rec = questionnairesList[idx];
+      showConfirmModal(
+        'ยืนยันการลบรายการสำรวจ',
+        `คุณต้องการลบข้อมูลสำรวจ "${rec ? rec.name : ''}" หรือไม่?`,
+        () => {
+          questionnairesList.splice(idx, 1);
+          refreshSheetTab();
+          renderCalendar();
+          openDayTasksModal(dateStr, dayNum); // refresh modal
+        }
+      );
+    }
+
+    // =========================================================================
+    // 9. INITIALIZATION
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      initLeafletMap();
+      loadMockData(); // โหลดชุดข้อมูลสำรวจเริ่มต้นเข้าสู่หน้า 2 และหน้า 3 ทันที
+      renderCalendar(); // วาดตารางปฏิทินทันที
+    });
+
+    window.addEventListener('resize', () => {
+      if (leafletMapInstance) leafletMapInstance.invalidateSize();
+      if (document.getElementById('tab2').classList.contains('active')) redrawAllCharts();
+    });
+  </script>
+</body>
+</html>
